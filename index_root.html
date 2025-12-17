@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Asia Climate Recon Explorer</title>
+  <meta http-equiv="refresh" content="0; url=index_en.html" />
+  <script>
+    // If user previously selected Korean, respect it.
+    try {
+      const pref = localStorage.getItem('acrex_lang_pref');
+      if (pref === 'ko') window.location.replace('index_ko.html');
+      else window.location.replace('index_en.html');
+    } catch (e) {
+      window.location.replace('index_en.html');
+    }
+  </script>
+</head>
+<body>
+  <p>Redirecting… If nothing happens, open <a href="index_en.html">English</a> or <a href="index_ko.html">한국어</a>.</p>
+</body>
+</html>

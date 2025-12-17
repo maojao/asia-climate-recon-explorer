@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Asia Climate Recon Explorer</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- MarkerCluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+
+  <!-- noUiSlider -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+
+  <!-- SortableJS -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+  <style>
+    :root { --border:#ddd; --muted:#555; --bg:#fafafa; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#fff; }
+    #app { display:flex; flex-direction:column; height:100vh; }
+
+    #topbar {
+      padding:10px 12px;
+      border-bottom:1px solid var(--border);
+      display:flex; flex-wrap:wrap;
+      gap:10px 14px; align-items:center;
+      background:white; z-index:10;
+    }
+    .small { font-size:12px; color:var(--muted); }
+    select, button, input[type="text"] { padding:6px 8px; }
+    button { cursor:pointer; }
+    .pill { background:var(--bg); border:1px solid var(--border); border-radius:999px; padding:6px 10px; }
+    .helpBtn { border:1px solid var(--border); background:white; border-radius:999px; padding:6px 10px; font-size:12px; }
+
+    #main {
+      display:grid;
+      grid-template-rows:58vh 42vh;
+      height: calc(100vh - 56px);
+    }
+    #mapWrap { position:relative; border-bottom:1px solid var(--border); z-index: 0; }
+    #map { height:100%; position: relative; z-index: 1; }
+
+    #sidePanel {
+      position:absolute; top:12px; right:12px;
+      z-index: 2000;
+      width:360px;
+      max-height:calc(100% - 24px);
+      overflow:auto;
+      background: rgba(255,255,255,0.96);
+      border:1px solid var(--border);
+      border-radius:14px;
+      box-shadow:0 8px 20px rgba(0,0,0,0.08);
+      padding:10px;
+    }
+    #sidePanel h3 { margin:4px 0 8px 0; font-size:14px; }
+    .row { display:flex; align-items:center; gap:8px; }
+    .grow { flex:1; }
+    .swatch { width:10px; height:10px; border-radius:3px; display:inline-block; }
+    .siteItem { padding:8px 8px; border:1px solid var(--border); border-radius:12px; margin-bottom:8px; background:white; }
+    .siteItem.highlight { outline:2px solid #222; outline-offset:2px; }
+    .siteItem.pinned { box-shadow: inset 0 0 0 2px #222; }
+    .siteName { font-weight:600; font-size:13px; }
+    .siteMeta { font-size:12px; color:var(--muted); margin-top:2px; }
+    .legendHint { font-size:12px; color:var(--muted); margin:2px 0 8px 0; }
+    .dragHandle { cursor: grab; user-select:none; padding: 2px 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+    .iconBtn { border: 1px solid var(--border); background: white; border-radius: 10px; padding: 4px 8px; }
+    .iconBtn.on { border-color:#222; }
+
+    #plotToolbar {
+      padding:10px 12px;
+      border-bottom:1px solid var(--border);
+      display:flex; flex-wrap:wrap;
+      gap:10px 14px; align-items:center;
+      background:#fff;
+    }
+    #plot { height: calc(42vh - 52px); }
+    #ageSlider { width:240px; margin:2px 6px; }
+
+    /* Overlays */
+    .overlay {
+      position:fixed; inset:0;
+      background:rgba(0,0,0,0.45);
+      display:none; align-items:center; justify-content:center;
+      z-index:9999;
+    }
+    .modal {
+      width: min(860px, 94vw);
+      max-height: 88vh;
+      overflow:auto;
+      background:white;
+      border-radius:16px;
+      padding:18px 20px;
+      box-shadow:0 20px 40px rgba(0,0,0,0.25);
+    }
+    .modal h2 { margin: 0 0 8px 0; }
+    .modal h3 { margin: 14px 0 6px 0; }
+    .modal p, .modal li { font-size:14px; line-height:1.55; }
+    .modal .closeBtn { float:right; border:1px solid var(--border); background:white; border-radius:10px; padding:4px 10px; }
+    .modal .kicker { font-size:12px; color:var(--muted); margin-bottom:10px; }
+    .callout { background: #f7f7f7; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+    .twoCol { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 900px) { .twoCol { grid-template-columns: 1fr; } }
+
+    @media (max-width: 900px) {
+      #sidePanel { width:92vw; left:12px; right:12px; }
+      #ageSlider { width:180px; }
+      #main { grid-template-rows:54vh 46vh; }
+    }
+  </style>
+</head>
+
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="pill small">Asia Climate Recon Explorer</span>
+
+    <label class="small">Lang</label>
+    <select id="langSelect">
+      <option value="en" >EN</option>
+      <option value="ko" selected>한국어</option>
+    </select>
+
+    <button class="helpBtn" id="welcomeBtn" title="Show welcome again">Welcome</button>
+    <button class="helpBtn" id="varHelpBtn">Variables</button>
+    <button class="helpBtn" id="methodHelpBtn">MAT vs WA-PLS</button>
+    <button class="helpBtn" id="aboutBtn">About dataset</button>
+
+    <label class="small">Basemap</label>
+    <select id="baseSelect">
+      <option value="osm" selected>OSM</option>
+      <option value="carto">Carto Light</option>
+    </select>
+
+    <label class="small">Hillshade</label>
+    <select id="hsSource">
+      <option value="wmf" selected>WMF</option>
+      <option value="esri">ESRI</option>
+      <option value="off">Off</option>
+    </select>
+    <input id="hsOpacity" type="range" min="0" max="100" value="45" />
+    <span class="small" id="hsLabel">45%</span>
+    <span class="small" id="hsStatus"></span>
+
+    <span class="pill small" id="selInfo">Selected: 0</span>
+    <input id="searchBox" type="text" placeholder="Search selected sites" style="min-width:220px;" />
+    <button id="clearBtn">Clear</button>
+  </div>
+
+  <div id="main">
+    <div id="mapWrap">
+      <div id="map"></div>
+
+      <div id="sidePanel">
+        <div class="row" style="justify-content:space-between;">
+          <h3>Selected sites</h3>
+          <span class="small" id="pointsInfo"></span>
+        </div>
+        <div class="legendHint">
+          • Drag ↕ to reorder (plot follows)<br>
+          • Solid = WA-PLS · Dashed = MAT · 📌 = pinned emphasis
+        </div>
+        <div id="selectedList"></div>
+      </div>
+    </div>
+
+    <div>
+      <div id="plotToolbar">
+        <label class="small">Variable</label>
+        <select id="groupSelect"></select>
+
+        <label class="small">Method</label>
+        <label class="small"><input type="checkbox" id="mWapls" checked> WA-PLS</label>
+        <label class="small"><input type="checkbox" id="mMat" checked> MAT</label>
+
+        <label class="small">Age axis</label>
+        <button class="helpBtn" id="ageHelpBtn" style="padding:4px 8px; font-size:11px;" title="What is mean vs median age?">i</button>
+        <select id="ageSelect">
+          <option value="mean" selected>mean</option>
+          <option value="median">median</option>
+        </select>
+
+        <span class="pill small">Age range</span>
+        <div id="ageSlider"></div>
+        <span class="small" id="ageReadout"></span>
+
+        <span class="pill small">Export</span>
+        <label class="small"><input type="radio" name="exportMode" value="view" checked> current view</label>
+        <label class="small"><input type="radio" name="exportMode" value="full"> full series</label>
+
+        <button id="exportPng">PNG</button>
+        <button id="exportSvg">SVG</button>
+        <button id="exportCsv">CSV</button>
+      </div>
+
+      <div id="plot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- WELCOME (one-time) -->
+<div class="overlay" id="welcomeOverlay">
+<div class="modal">
+    <button class="closeBtn" onclick="closeOverlay('welcomeOverlay', true)">닫기</button>
+    <h2>환영합니다</h2>
+    <div class="kicker">이 안내는 이 기기/브라우저에서 <b>처음 1회만</b> 표시됩니다.</div>
+
+    <div class="twoCol">
+      <div class="callout">
+        <h3>사용 방법</h3>
+        <ul>
+          <li>지도에서 <b>마커를 클릭</b>해 여러 지점을 선택합니다.</li>
+          <li>선택된 지점은 오른쪽 패널에 나타나며, <b>↕ 드래그</b>로 순서를 바꾸면 그래프도 같은 순서를 따릅니다.</li>
+          <li><b>변수(Variable)</b>를 고르고, <b>WA‑PLS / MAT</b>를 켜거나 끄며 비교합니다.</li>
+          <li><b>Age range</b> 슬라이더로 관심 구간(연대 범위)만 확대해 봅니다.</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <h3>해석 팁</h3>
+        <ul>
+          <li><b>실선</b> = WA‑PLS, <b>점선</b> = MAT</li>
+          <li>두 방법이 비슷하면 → 신호가 비교적 견고할 가능성이 큽니다.</li>
+          <li>두 방법이 다르면 → 품질지표(MinDC/DSML, 오차)와 함께 <b>주의해서 해석</b>합니다.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:12px;">
+      <h3>Age axis: mean vs median</h3>
+      <ul>
+        <li><b>mean</b>: 각 샘플의 평균(산술평균) 연대(ka BP)</li>
+        <li><b>median</b>: 각 샘플의 중앙값(50%) 연대 — 분포가 비대칭일 때 더 안정적인 대표값</li>
+      </ul>
+      <div class="small">mean과 median의 차이가 크면, 연대 불확실성 분포가 한쪽으로 치우쳤을 가능성이 있습니다.</div>
+    </div>
+
+    <div class="callout" style="margin-top:12px;">
+      <h3>왜 recon 파일만 먼저 보여주나요?</h3>
+      <p>
+        이 뷰어는 <b>1차 산출물(기후 재구성 시계열)</b>인
+        <code>...climate-recons_Asia.tab</code>을 중심으로 빠른 탐색을 돕습니다.
+        같은 데이터셋에는 <b>모델 통계</b>와 <b>유의성 검정</b> 결과 파일도 별도로 제공되는데,
+        이는 주로 <b>전문가용 품질 평가</b> 목적이라 기본 화면에는 넣지 않았습니다(상단 <b>About dataset</b> 참고).
+      </p>
+    </div>
+
+    <p class="small" style="margin-top:10px;">
+      논문(ESSD): Herzschuh et al. (2023) —
+      <a href="https://doi.org/10.5194/essd-15-2235-2023" target="_blank" rel="noopener">10.5194/essd-15-2235-2023</a>
+    </p>
+
+    <div class="callout" style="margin-top:12px;">
+      <h3>인용 방법</h3>
+      <ul>
+        <li><b>Dataset (PANGAEA):</b> <a href="https://doi.org/10.1594/PANGAEA.930512" target="_blank" rel="noopener">10.1594/PANGAEA.930512</a></li>
+        <li><b>Paper (ESSD):</b> <a href="https://doi.org/10.5194/essd-15-2235-2023" target="_blank" rel="noopener">10.5194/essd-15-2235-2023</a></li>
+        <li><b>Code (Zenodo):</b> <a href="https://doi.org/10.5281/zenodo.7887565" target="_blank" rel="noopener">10.5281/zenodo.7887565</a></li>
+      </ul>
+      <div class="small">
+        이 페이지는 공개 데이터셋의 <b>독립적 시각화 도구</b>입니다. 결과를 사용할 때는 원 논문/데이터셋을 인용해 주세요.
+      </div>
+    </div>
+  </div>
+</div>
+
+    <div class="twoCol">
+      <div class="callout">
+        <h3>How to use</h3>
+        <ul>
+          <li><b>Click</b> map markers to select multiple sites.</li>
+          <li>Selected sites appear in the panel; <b>drag ↕</b> to reorder.</li>
+          <li>Choose <b>Variable</b> and toggle <b>WA-PLS / MAT</b>.</li>
+          <li>Use the <b>Age range</b> slider to focus on a time window.</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <h3>Interpretation tips</h3>
+        <ul>
+          <li><b>Solid vs dashed</b>: WA-PLS vs MAT.</li>
+          <li>If both agree → signal is likely robust.</li>
+          <li>If they disagree → check diagnostics (MinDC/DSML, errors).</li>
+        </ul>
+      </div>
+    </div>
+
+    
+    <div class="callout" style="margin-top:12px;">
+      <h3>Age axis: mean vs median</h3>
+      <ul>
+        <li><b>mean</b>: the arithmetic mean age (ka BP) for each sample.</li>
+        <li><b>median</b>: the 50th percentile age (more robust if age estimates are skewed).</li>
+      </ul>
+      <div class="small">Tip: if mean and median differ a lot, the underlying age uncertainty distribution may be asymmetric.</div>
+    </div>
+
+    <div class="callout" style="margin-top:12px;">
+      <h3>Why only one file is visualized</h3>
+      <p>
+        This public viewer focuses on the <b>primary reconstruction time series</b> file
+        (<code>...climate-recons_Asia.tab</code>). The dataset also provides separate files for
+        <b>model statistics</b> and <b>significance tests</b>, which are intended for expert assessment.
+        You can read details in <b>About dataset</b>.
+      </p>
+    </div>
+
+<p class="small" style="margin-top:10px;">
+      Paper: Herzschuh et al., <i>Earth System Science Data</i> (2023), DOI: <a href="https://doi.org/10.5194/essd-15-2235-2023" target="_blank" rel="noopener">10.5194/essd-15-2235-2023</a>.
+    </p>
+    <div class="callout" style="margin-top:12px;">
+      <h3>How to cite</h3>
+      <ul>
+        <li><b>Dataset (PANGAEA):</b> <a href="https://doi.org/10.1594/PANGAEA.930512" target="_blank" rel="noopener">10.1594/PANGAEA.930512</a></li>
+        <li><b>Paper (ESSD):</b> <a href="https://doi.org/10.5194/essd-15-2235-2023" target="_blank" rel="noopener">10.5194/essd-15-2235-2023</a></li>
+        <li><b>Reconstruction code (Zenodo):</b> <a href="https://doi.org/10.5281/zenodo.7887565" target="_blank" rel="noopener">10.5281/zenodo.7887565</a></li>
+      </ul>
+      <div class="small">
+        This viewer is an <b>independent visualization</b> of the open dataset; please cite the original dataset/paper when using results.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VARIABLES GLOSSARY -->
+<div class="overlay" id="varOverlay">
+<div class="modal">
+    <button class="closeBtn" onclick="closeOverlay('varOverlay', false)">닫기</button>
+    <h2>변수 설명</h2>
+    <p class="kicker">원본 데이터에 포함된 주요 변수들을 비전공자도 이해할 수 있게 요약했습니다.</p>
+
+    <h3>🌡 기온(Temperature)</h3>
+    <ul>
+      <li><b>MAAT (°C)</b> — 연평균 기온(Mean Annual Air Temperature). 연중 평균적인 기온 상태를 나타냅니다.</li>
+      <li><b>July T (°C)</b> — 7월 평균 기온(여름 기온 지표). 고위도/고산에서 생태·빙하 반응과 특히 관련이 큽니다.</li>
+    </ul>
+
+    <h3>🌧 강수(Precipitation)</h3>
+    <ul>
+      <li><b>Pann (mm/a)</b> — 연강수량(Annual total precipitation). 연간 총 강수량(단위: mm/년)입니다.</li>
+    </ul>
+
+    <h3>🧪 품질 지표(Diagnostics: 신뢰도 판단 보조)</h3>
+    <ul>
+      <li><b>MinDC</b> — 현대 아날로그(비슷한 현대 사례)와의 최소 거리. 일반적으로 <b>작을수록</b> 더 좋은 아날로그를 의미합니다.</li>
+      <li><b>DSML</b> — 유사도/거리 기반 지표. 값이 큰 구간은 비슷한 현대 사례가 약하다는 신호일 수 있습니다.</li>
+      <li><b>Reconstruction error (±)</b> — 재구성 오차(불확실성) 추정치입니다.</li>
+    </ul>
+
+    <div class="callout">
+      <b>중요:</b> Diagnostics는 기후 변수(기온/강수)가 아니라, “이 결과를 얼마나 조심해서 봐야 하는지”를 알려주는 <b>보조 정보</b>입니다.
+    </div>
+  </div>
+</div>
+  </div>
+</div>
+
+
+<!-- ABOUT DATASET -->
+<div class="overlay" id="aboutOverlay">
+<div class="modal">
+    <button class="closeBtn" onclick="closeOverlay('aboutOverlay', false)">닫기</button>
+    <h2>데이터 구조(원본 3개 파일)와 이 뷰어의 범위</h2>
+    <p class="kicker">
+      LegacyClimate 데이터는 <b>주요 재구성 결과</b>와 <b>품질 평가 레이어</b>를 분리하기 위해 여러 파일로 제공됩니다.
+      이 뷰어는 기본적으로 “탐색과 비교”에 집중합니다.
+    </p>
+
+    <h3>1) 주요 재구성 결과(이 뷰어가 사용하는 파일)</h3>
+    <div class="callout">
+      <p><code>Herzschuh-etal_2021_climate-recons_Asia.tab</code></p>
+      <ul>
+        <li>샘플별 연대(mean/median)와 기후 재구성 값(MAAT/Tann, July T, Pann 등)을 포함</li>
+        <li>방법별(WA‑PLS, MAT 등) 시계열이 들어 있어 <b>그래프/지도 탐색</b>에 적합</li>
+      </ul>
+    </div>
+
+    <h3>2) 모델 성능/통계(전문가용 품질 레이어)</h3>
+    <div class="callout">
+      <p><code>Herzschuh-etal_2021_climate-recons-model-stats_Asia.tab</code></p>
+      <ul>
+        <li>RMSEP, r², calibration 정보 등 “모델이 얼마나 잘 맞는지”에 대한 요약</li>
+        <li><b>용도:</b> 지역/변수별 신뢰도 평가, 필터링 기준 설정, 리뷰 대응</li>
+      </ul>
+    </div>
+
+    <h3>3) 유의성 검정(전문가용 caution 레이어)</h3>
+    <div class="callout">
+      <p><code>Herzschuh-etal_2021_climate-recons-signif_Asia.tab</code></p>
+      <ul>
+        <li>통계적 유의성 검정 결과(p 기준) 제공</li>
+        <li><b>용도:</b> 합성(synthesis) 시 가중/필터링, “조심해서 해석해야 할 구간” 표시</li>
+        <li class="small">유의성 검정 실패가 곧 “틀림”을 의미하지는 않지만, 추가 주의를 권합니다.</li>
+      </ul>
+    </div>
+
+    <h3 id="ageAxisSection">Age axis: mean vs median</h3>
+    <div class="callout">
+      <ul>
+        <li><b>mean</b>: 산술평균 연대(ka BP) — 기본값으로 사용하기 쉬움</li>
+        <li><b>median</b>: 중앙값 연대(50%) — 분포가 비대칭일 때 대표값으로 더 안정적</li>
+      </ul>
+      <p class="small">
+        실무 팁: 특별한 이유가 없으면 <b>mean</b>을 기본으로 두고, mean/median 차이가 크거나
+        “대표값”에 더 집중하고 싶다면 <b>median</b>을 사용하세요.
+      </p>
+    </div>
+
+    <h3>향후 확장 아이디어(기억용 메모)</h3>
+    <div class="callout">
+      <ul>
+        <li>Expert mode: RMSEP/MinDC 배지 표시 + 임계값 필터링</li>
+        <li>Significance shading: 유의성 통과/미통과 시각화</li>
+        <li>WA‑PLS_tailored 추가(해당 지역 파일에 존재할 경우)</li>
+      </ul>
+    </div>
+
+    <h3>References & DOIs</h3>
+    <div class="callout">
+      <ul>
+        <li><b>논문(ESSD):</b> <a href="https://doi.org/10.5194/essd-15-2235-2023" target="_blank" rel="noopener">10.5194/essd-15-2235-2023</a></li>
+        <li><b>Dataset (PANGAEA):</b> <a href="https://doi.org/10.1594/PANGAEA.930512" target="_blank" rel="noopener">10.1594/PANGAEA.930512</a></li>
+        <li><b>Code (Zenodo):</b> <a href="https://doi.org/10.5281/zenodo.7887565" target="_blank" rel="noopener">10.5281/zenodo.7887565</a></li>
+      </ul>
+      <p class="small">데이터 출처/재현성 확인을 위해 DOI 링크를 함께 제공합니다.</p>
+    </div>
+  </div>
+</div>
+
+    <h3>2) Model-statistics file (expert assessment layer)</h3>
+    <div class="callout">
+      <p><code>Herzschuh-etal_2021_climate-recons-model-stats_Asia.tab</code></p>
+      <ul>
+        <li>Summarizes model performance / metadata (e.g., RMSEP, r², calibration characteristics).</li>
+        <li><b>Main purpose:</b> decide where reconstructions are more/less reliable and how methods perform regionally.</li>
+      </ul>
+    </div>
+
+    <h3>3) Significance-test file (expert caution layer)</h3>
+    <div class="callout">
+      <p><code>Herzschuh-etal_2021_climate-recons-signif_Asia.tab</code></p>
+      <ul>
+        <li>Reports statistical significance tests (e.g., following Telford & Birks-style tests described in the paper).</li>
+        <li><b>Main purpose:</b> interpret reconstructions cautiously and support filtering/weighting for syntheses.</li>
+        <li class="small">Failing a significance test does not automatically mean “wrong”, but suggests extra caution.</li>
+      </ul>
+    </div>
+
+    <h3 id="ageAxisSection">Age axis: mean vs median</h3>
+    <div class="callout">
+      <ul>
+        <li><b>mean</b>: the arithmetic mean age (ka BP).</li>
+        <li><b>median</b>: the 50th percentile age. More robust when the age distribution is skewed or has long tails.</li>
+      </ul>
+      <p class="small">
+        Practical guidance: use <b>mean</b> as the default for compatibility with many workflows; switch to <b>median</b>
+        when you want a robust “typical” age estimate per sample.
+      </p>
+    </div>
+
+    <h3>Roadmap (optional future enhancements)</h3>
+    <div class="callout">
+      <ul>
+        <li>Add “Expert mode” overlays: show RMSEP/MinDC as badges and allow filtering by thresholds.</li>
+        <li>Add “Significance shading”: visually mark intervals/sites that pass/fail tests.</li>
+        <li>Add “WA-PLS_tailored” series (if present in the recon file for your region).</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+
+<!-- METHODS GLOSSARY -->
+<div class="overlay" id="methodOverlay">
+<div class="modal">
+    <button class="closeBtn" onclick="closeOverlay('methodOverlay', false)">닫기</button>
+    <h2>방법 설명: MAT vs WA‑PLS</h2>
+    <p class="kicker">처음 보는 분도 이해할 수 있도록 원리를 포함해 자세히 설명합니다.</p>
+
+    <div class="twoCol">
+      <div class="callout">
+        <h3>MAT (Modern Analogue Technique)</h3>
+        <p>
+          MAT는 “<b>현대에 있는 가장 비슷한 사례를 찾아서 그 값을 쓰는 방식</b>”이라고 생각하면 됩니다.
+          과거(화석) 샘플의 꽃가루 조성을 현대 표본 데이터베이스와 비교해서,
+          가장 비슷한(유사도가 높은) 현대 표본들의 기후값을 평균해 과거의 기후를 추정합니다.
+        </p>
+        <ul>
+          <li><b>장점:</b> 직관적이고 보수적(과도한 외삽이 적음)</li>
+          <li><b>단점:</b> “비슷한 현대 사례”가 부족하면 결과가 들쭉날쭉해질 수 있음</li>
+          <li><b>함께 보기:</b> MinDC/DSML은 아날로그가 얼마나 좋은지(믿을 만한지) 판단에 도움</li>
+        </ul>
+      </div>
+
+      <div class="callout">
+        <h3>WA‑PLS (Weighted Averaging – Partial Least Squares)</h3>
+        <p>
+          WA‑PLS는 “<b>현대 자료에서 관계를 학습한 뒤, 그 관계로 과거 값을 예측하는 방식</b>”입니다.
+          꽃가루(생물학적 지표)가 기후(기온/강수)에 어떻게 반응하는지를 통계적으로 모델링합니다.
+          Weighted averaging(가중 평균)과 PLS(잠재 성분을 이용한 회귀)를 결합해
+          잡음이 많은 자료에서도 장기 경향을 비교적 안정적으로 추정하는 데 강점이 있습니다.
+        </p>
+        <ul>
+          <li><b>장점:</b> 노이즈에 강하고 장기 변화(트렌드)를 보기 좋게 제시</li>
+          <li><b>단점:</b> 모델 가정/설정에 영향을 받을 수 있고, 과도한 매끈함(smoothing) 가능</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:12px;">
+      <b>이 뷰어에서의 읽는 법:</b> WA‑PLS(실선)과 MAT(점선)가 비슷하면 신호가 견고할 가능성이 큽니다.
+      다르면 품질지표(MinDC/DSML, 오차)를 참고해 해석을 보수적으로 하세요.
+    </div>
+  </div>
+</div>
+
+      <div class="callout">
+        <h3>WA-PLS (Weighted Averaging – Partial Least Squares)</h3>
+        <p>
+          Think of WA‑PLS as “learn the relationship, then predict.”
+          It models how the proxy indicators respond to climate using calibration data.
+          By combining <i>weighted averaging</i> with <i>latent components</i> (PLS),
+          it often produces smoother and more robust long‑term trends than pure analogue lookup.
+        </p>
+        <ul>
+          <li><b>Strength:</b> good at extracting long-term signals from noisy data.</li>
+          <li><b>Weakness:</b> more model-dependent; smoothing can hide short spikes.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:12px;">
+      <b>How to read the plot here:</b>
+      If WA‑PLS (solid) and MAT (dashed) agree, the signal is likely robust.
+      If they disagree, treat the interval cautiously and check diagnostics (MinDC/DSML, errors).
+    </div>
+  </div>
+</div>
+
+<script>
+function openOverlay(id){ document.getElementById(id).style.display='flex'; }
+function closeOverlay(id, markWelcomeSeen){
+  document.getElementById(id).style.display='none';
+  if (markWelcomeSeen) localStorage.setItem('acrex_welcome_seen', '1');
+}
+</script>
+
+<script>
+(async function () {
+  const data = await (await fetch("./sites.json")).json();
+  const sites = data.sites;
+  const variables = data.variables;
+
+  // One-time welcome
+  const seen = localStorage.getItem('acrex_welcome_seen');
+  if (!seen) openOverlay('welcomeOverlay');
+
+  // help buttons
+  document.getElementById('welcomeBtn').onclick = () => openOverlay('welcomeOverlay');
+  document.getElementById('varHelpBtn').onclick = () => openOverlay('varOverlay');
+  document.getElementById('methodHelpBtn').onclick = () => openOverlay('methodOverlay');
+  // language switch (static pages)
+  const langSelect = document.getElementById('langSelect');
+  if (langSelect) {
+    langSelect.addEventListener('change', () => {
+      const v = langSelect.value;
+      if (v === 'ko') window.location.href = 'index_ko.html';
+      else window.location.href = 'index_en.html';
+    });
+  }
+  document.getElementById('aboutBtn').onclick = () => { openOverlay('aboutOverlay'); };
+  document.getElementById('ageHelpBtn').onclick = () => { openOverlay('aboutOverlay'); setTimeout(()=>{ const el=document.getElementById('ageAxisSection'); if(el) el.scrollIntoView({behavior:'smooth'}); }, 50); };
+
+  // parse variables into groups/methods
+  function parseVar(v) {
+    const parts = v.label.split(" - ");
+    const group = parts[0].trim();
+    const method = (parts[1] || "").trim(); // WA-PLS | MAT | ""
+    return { key: v.key, label: v.label, group, method };
+  }
+  const parsedVars = variables.map(parseVar);
+  const groups = Array.from(new Set(parsedVars.map(v => v.group))).sort((a,b) => a.localeCompare(b));
+
+  // UI handles
+  const baseSelect = document.getElementById("baseSelect");
+  const hsOpacity = document.getElementById("hsOpacity");
+  const hsLabel = document.getElementById("hsLabel");
+  const searchBox = document.getElementById("searchBox");
+  const clearBtn = document.getElementById("clearBtn");
+  const selInfo = document.getElementById("selInfo");
+  const pointsInfo = document.getElementById("pointsInfo");
+  const selectedList = document.getElementById("selectedList");
+
+  const ageSelect = document.getElementById("ageSelect");
+  const groupSelect = document.getElementById("groupSelect");
+  const mWapls = document.getElementById("mWapls");
+  const mMat = document.getElementById("mMat");
+  const exportPng = document.getElementById("exportPng");
+  const exportSvg = document.getElementById("exportSvg");
+  const exportCsv = document.getElementById("exportCsv");
+  const ageReadout = document.getElementById("ageReadout");
+  const sliderEl = document.getElementById("ageSlider");
+
+  // populate groups
+  groups.forEach(g => {
+    const opt = document.createElement("option");
+    opt.value = g;
+    opt.textContent = g;
+    groupSelect.appendChild(opt);
+  });
+  // default group preference
+  const preferred = ["MAAT (°C)", "July T (°C)", "Pann (mm/a)"];
+  groupSelect.value = preferred.find(p => groups.includes(p)) || groups[0];
+
+  // Map init
+  const map = L.map("map", { worldCopyJump:true }).setView([40, 90], 3);
+  const baseLayers = {
+    osm: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18, attribution:"&copy; OpenStreetMap" }),
+    carto: L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom:18, attribution:"&copy; OpenStreetMap & Carto" })
+  };
+  baseLayers.osm.addTo(map);
+  const hsSource = document.getElementById("hsSource");
+  const hsStatus = document.getElementById("hsStatus");
+
+  const hillshadeWMF = L.tileLayer("https://tiles.wmflabs.org/hillshading/{z}/{x}/{y}.png", {
+    maxZoom: 18, opacity: 0.45, attribution: "Hillshade (WMF)"
+  });
+
+  const hillshadeESRI = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 18, opacity: 0.45, attribution: "Hillshade (ESRI)"
+  });
+
+  let hillshade = hillshadeWMF.addTo(map);
+
+  function attachHillshadeEvents(layer) {
+    layer.on("tileerror", () => {
+      hsStatus.textContent = " (not loading)";
+    });
+    layer.on("load", () => {
+      hsStatus.textContent = "";
+    });
+  }
+  attachHillshadeEvents(hillshadeWMF);
+  attachHillshadeEvents(hillshadeESRI);
+
+  function setHillshadeSource(val) {
+    if (hillshade) map.removeLayer(hillshade);
+    hsStatus.textContent = "";
+    if (val === "off") {
+      hillshade = null;
+      return;
+    }
+    hillshade = (val === "esri") ? hillshadeESRI : hillshadeWMF;
+    hillshade.setOpacity(Number(hsOpacity.value) / 100);
+    hillshade.addTo(map);
+    if (hillshade) hillshade.bringToFront();
+  }
+
+  hsSource.addEventListener("change", () => setHillshadeSource(hsSource.value));
+
+  baseSelect.addEventListener("change", () => {
+    const v = baseSelect.value;
+    Object.values(baseLayers).forEach(l => map.removeLayer(l));
+    baseLayers[v].addTo(map);
+    if (hillshade) hillshade.bringToFront();
+  });
+  hsOpacity.addEventListener("input", () => {
+    if (hillshade) hillshade.setOpacity(Number(hsOpacity.value)/100);
+    hsLabel.textContent = `${hsOpacity.value}%`;
+  });
+
+  // selection state
+  const selected = new Map();      // id -> {site, marker, color}
+  const selectedOrder = [];        // order for plotting
+  const pinned = new Set();        // pinned ids
+  let highlightId = null;
+
+  const colorway = ["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"];
+  function nextColor(){ return colorway[selected.size % colorway.length]; }
+  function setMarkerStyle(m, isOn, color) {
+    if (isOn) m.setStyle({ radius:8, weight:2, fillOpacity:1.0, color:color, fillColor:color });
+    else m.setStyle({ radius:5, weight:1, fillOpacity:0.85, color:undefined, fillColor:undefined });
+  }
+  function getAgeArray(site) {
+    return (ageSelect.value === "median") ? (site.age_median_ka_bp || []) : (site.age_mean_ka_bp || []);
+  }
+  function popupHtml(s) {
+    return `
+      <div style="min-width:230px">
+        <b>${s.name}</b><br/>
+        <span class="small">Event:</span> ${s.event}<br/>
+        <span class="small">Site ID:</span> ${s.site_id}<br/>
+        <span class="small">Lat/Lon:</span> ${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}<br/>
+        <span class="small">Points:</span> ${(getAgeArray(s) || []).length}
+      </div>`;
+  }
+
+  const cluster = L.markerClusterGroup({ showCoverageOnHover:false });
+  map.addLayer(cluster);
+
+  for (const s of sites) {
+    const id = String(s.site_id);
+    const m = L.circleMarker([s.lat, s.lon], { radius:5, weight:1, fillOpacity:0.85 });
+    m.on("click", () => toggleSelect(id, s, m));
+    cluster.addLayer(m);
+  }
+
+  function toggleSelect(id, site, marker) {
+    if (selected.has(id)) {
+      const obj = selected.get(id);
+      selected.delete(id);
+      setMarkerStyle(marker, false);
+      marker.closePopup();
+      const idx = selectedOrder.indexOf(id);
+      if (idx >= 0) selectedOrder.splice(idx, 1);
+      pinned.delete(id);
+      if (highlightId === id) highlightId = null;
+    } else {
+      const color = nextColor();
+      selected.set(id, { site, marker, color });
+      setMarkerStyle(marker, true, color);
+      marker.bindPopup(popupHtml(site), {autoPan:true, autoPanPaddingTopLeft:[10,10], autoPanPaddingBottomRight:[390,10]}).openPopup();
+      selectedOrder.push(id);
+      highlightId = id;
+    }
+    updateSelectedList();
+    updatePlot();
+  }
+
+  function entriesInOrderFiltered() {
+    const q = (searchBox.value || "").toLowerCase().trim();
+    const ids = selectedOrder.filter(id => selected.has(id));
+    const out = [];
+    for (const id of ids) {
+      const obj = selected.get(id);
+      const name = (obj.site.name || "").toLowerCase();
+      if (q && !name.includes(q)) continue;
+      out.push({ id, ...obj });
+    }
+    return out;
+  }
+
+  function updateSelectedList() {
+    const entries = entriesInOrderFiltered();
+    selectedList.innerHTML = "";
+
+    for (const e of entries) {
+      const div = document.createElement("div");
+      const isPinned = pinned.has(e.id);
+      div.className = "siteItem" + (highlightId === e.id ? " highlight" : "") + (isPinned ? " pinned" : "");
+      div.setAttribute("data-id", e.id);
+
+      div.innerHTML = `
+        <div class="row">
+          <span class="dragHandle" title="Drag to reorder">↕</span>
+          <label class="grow" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" checked data-id="${e.id}" />
+            <span class="swatch" style="background:${e.color}"></span>
+            <span class="siteName">${e.site.name}</span>
+          </label>
+          <button class="iconBtn ${isPinned ? "on" : ""}" data-pin="${e.id}" title="Pin emphasis">📌</button>
+          <button class="iconBtn small" data-zoom="${e.id}">Zoom</button>
+        </div>
+        <div class="siteMeta">ID:${e.site.site_id} · ${e.site.lat.toFixed(3)}, ${e.site.lon.toFixed(3)}</div>
+      `;
+
+      div.addEventListener("click", (ev) => {
+        const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : "";
+        if (tag === "input" || tag === "button") return;
+        highlightId = e.id;
+        updateSelectedList();
+        updatePlot();
+      });
+
+      selectedList.appendChild(div);
+    }
+
+    selectedList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener("change", (ev) => {
+        const id = ev.target.getAttribute("data-id");
+        if (!selected.has(id)) return;
+        const obj = selected.get(id);
+        selected.delete(id);
+        setMarkerStyle(obj.marker, false);
+        obj.marker.closePopup();
+        const idx = selectedOrder.indexOf(id);
+        if (idx >= 0) selectedOrder.splice(idx, 1);
+        pinned.delete(id);
+        if (highlightId === id) highlightId = null;
+        updateSelectedList();
+        updatePlot();
+      });
+    });
+
+    selectedList.querySelectorAll('button[data-pin]').forEach(btn => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const id = ev.target.getAttribute("data-pin");
+        if (!selected.has(id)) return;
+        if (pinned.has(id)) pinned.delete(id); else pinned.add(id);
+        updateSelectedList();
+        updatePlot();
+      });
+    });
+
+    selectedList.querySelectorAll('button[data-zoom]').forEach(btn => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const id = ev.target.getAttribute("data-zoom");
+        const obj = selected.get(id);
+        if (!obj) return;
+        highlightId = id;
+        map.setView([obj.site.lat, obj.site.lon], 7, { animate:true });
+        // Nudge map left so the marker isn't hidden behind the right-side panel
+        setTimeout(() => { map.panBy([-220, 0], {animate: true}); obj.marker.openPopup(); }, 250);
+        updateSelectedList();
+        updatePlot();
+      });
+    });
+
+    selInfo.textContent = `Selected: ${selected.size}`;
+    const totalPts = Array.from(selected.values()).reduce((acc,o) => acc + ((getAgeArray(o.site) || []).length), 0);
+    pointsInfo.textContent = selected.size ? `Total points: ${totalPts}` : "";
+  }
+
+  clearBtn.addEventListener("click", () => {
+    for (const [id,obj] of selected.entries()) {
+      setMarkerStyle(obj.marker, false);
+      obj.marker.closePopup();
+    }
+    selected.clear();
+    selectedOrder.splice(0, selectedOrder.length);
+    pinned.clear();
+    highlightId = null;
+    updateSelectedList();
+    updatePlot();
+  });
+  searchBox.addEventListener("input", updateSelectedList);
+
+  new Sortable(selectedList, {
+    animation: 120,
+    handle: ".dragHandle",
+    onEnd: () => {
+      const domIds = Array.from(selectedList.querySelectorAll(".siteItem")).map(el => el.getAttribute("data-id"));
+      const hidden = selectedOrder.filter(id => selected.has(id) && !domIds.includes(id));
+      selectedOrder.splice(0, selectedOrder.length, ...domIds, ...hidden);
+      updatePlot();
+    }
+  });
+
+  // Age slider (global range based on mean by default)
+  function computeAgeMinMax(axis) {
+    let mn = Infinity, mx = -Infinity;
+    for (const s of sites) {
+      const arr = axis === "median" ? (s.age_median_ka_bp || []) : (s.age_mean_ka_bp || []);
+      for (const v of arr) {
+        if (typeof v !== "number" || !isFinite(v)) continue;
+        mn = Math.min(mn, v); mx = Math.max(mx, v);
+      }
+    }
+    if (!isFinite(mn) || !isFinite(mx)) return [0, 100];
+    return [mn, mx];
+  }
+  let [globalMin, globalMax] = computeAgeMinMax("mean");
+  noUiSlider.create(sliderEl, { start:[globalMin, globalMax], connect:true, step:0.1, range:{min:globalMin, max:globalMax} });
+
+  function getAgeWindow() {
+    const vals = sliderEl.noUiSlider.get().map(x => Number(x));
+    return [Math.min(vals[0], vals[1]), Math.max(vals[0], vals[1])];
+  }
+  sliderEl.noUiSlider.on("update", () => {
+    const [a0,a1] = getAgeWindow();
+    ageReadout.textContent = `${a0.toFixed(1)} – ${a1.toFixed(1)} ka BP`;
+  });
+  sliderEl.noUiSlider.on("set", () => updatePlot());
+
+  function resetSliderForAxis(axis) {
+    const [mn,mx] = computeAgeMinMax(axis);
+    const [cur0,cur1] = getAgeWindow();
+    const n0 = Math.max(mn, Math.min(mx, cur0));
+    const n1 = Math.max(mn, Math.min(mx, cur1));
+    sliderEl.noUiSlider.updateOptions({ range: { min: mn, max: mx } }, false);
+    sliderEl.noUiSlider.set([Math.min(n0,n1), Math.max(n0,n1)]);
+  }
+
+  // Plot init
+  Plotly.newPlot("plot", [{ x:[], y:[], mode:"lines+markers", name:"select a site" }], {
+    margin:{l:60,r:15,t:20,b:50},
+    xaxis:{ title:"Age (ka BP)", autorange:"reversed" },
+    yaxis:{ title:"Value" },
+    legend:{ orientation:"h" }
+  }, {responsive:true});
+
+  function filterPairs(x, y, minA, maxA, mode) {
+    const xf=[], yf=[];
+    for (let i=0; i<Math.min(x.length, y.length); i++) {
+      const xv=x[i], yv=y[i];
+      if (xv==null || yv==null) continue;
+      if (typeof xv !== "number" || typeof yv !== "number") continue;
+      if (!isFinite(xv) || !isFinite(yv)) continue;
+      if (mode === "view" && (xv < minA || xv > maxA)) continue;
+      xf.push(xv); yf.push(yv);
+    }
+    return {x:xf, y:yf};
+  }
+
+  function activeVarKeys() {
+    const group = groupSelect.value;
+    const allowW = mWapls.checked;
+    const allowM = mMat.checked;
+    const out=[];
+    parsedVars.forEach(v => {
+      if (v.group !== group) return;
+      if (v.method === "WA-PLS" && allowW) out.push(v.key);
+      if (v.method === "MAT" && allowM) out.push(v.key);
+      if (!v.method) out.push(v.key);
+    });
+    return out;
+  }
+  function methodForKey(key) {
+    const v = parsedVars.find(x => x.key === key);
+    return (v && v.method) ? v.method : "series";
+  }
+
+  function updatePlot() {
+    const mode = document.querySelector('input[name="exportMode"]:checked').value; // doesn't change plot, but ok
+    const [minA,maxA] = getAgeWindow();
+    const keys = activeVarKeys();
+    const group = groupSelect.value;
+
+    const traces=[];
+    const ids = selectedOrder.filter(id => selected.has(id));
+
+    for (const id of ids) {
+      const obj = selected.get(id);
+      const s = obj.site;
+      const color = obj.color;
+      const xRaw = getAgeArray(s);
+
+      const isPinned = pinned.has(id);
+      const isHi = (highlightId === id);
+      const lineW = isHi ? 5 : (isPinned ? 4 : 2);
+      const mSize = isHi ? 9 : (isPinned ? 8 : 6);
+
+      let legendShown = false;
+      for (const key of keys) {
+        const yRaw = (s.series && s.series[key]) ? s.series[key] : [];
+        const filtered = filterPairs(xRaw, yRaw, minA, maxA, "view"); // plot always respects slider
+        const method = methodForKey(key);
+        const dash = (method === "MAT") ? "dash" : "solid";
+
+        traces.push({
+          x: filtered.x,
+          y: filtered.y,
+          mode: "lines+markers",
+          name: s.name,
+          legendgroup: id,
+          showlegend: !legendShown,
+          line: { color: color, width: lineW, dash: dash },
+          marker: { color: color, size: mSize },
+          hovertemplate: "%{x:.2f} ka BP<br>%{y:.3f}<extra>" + s.name + " · " + method + "</extra>"
+        });
+        legendShown = true;
+      }
+    }
+
+    if (traces.length === 0) traces.push({x:[], y:[], mode:"lines+markers", name:"select a site"});
+
+    Plotly.react("plot", traces, {
+      margin:{l:60,r:15,t:20,b:50},
+      xaxis:{ title:`Age (ka BP) — ${ageSelect.value}`, autorange:"reversed" },
+      yaxis:{ title: group },
+      legend:{ orientation:"h" }
+    }, {responsive:true});
+  }
+
+  // Wire controls
+  groupSelect.addEventListener("change", updatePlot);
+  mWapls.addEventListener("change", updatePlot);
+  mMat.addEventListener("change", updatePlot);
+  ageSelect.addEventListener("change", () => { resetSliderForAxis(ageSelect.value); updatePlot(); });
+  document.querySelectorAll('input[name="exportMode"]').forEach(r => r.addEventListener("change", () => {/* export mode only */}));
+
+  // plot click highlight
+  const plotDiv = document.getElementById("plot");
+  plotDiv.on("plotly_click", (ev) => {
+    if (!ev || !ev.points || !ev.points.length) return;
+    const lg = ev.points[0].data && ev.points[0].data.legendgroup;
+    if (lg && selected.has(lg)) {
+      highlightId = lg;
+      updateSelectedList();
+      updatePlot();
+    }
+  });
+
+  // Exports
+  exportPng.addEventListener("click", async () => {
+    await Plotly.downloadImage("plot", {format:"png", filename:"climate_recon_plot"});
+  });
+  exportSvg.addEventListener("click", async () => {
+    await Plotly.downloadImage("plot", {format:"svg", filename:"climate_recon_plot"});
+  });
+
+  function downloadText(filename, text) {
+    const blob = new Blob([text], {type:"text/csv;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  exportCsv.addEventListener("click", () => {
+    const mode = document.querySelector('input[name="exportMode"]:checked').value; // view | full
+    const [minA,maxA] = getAgeWindow();
+    const keys = activeVarKeys();
+    const group = groupSelect.value;
+    const axis = ageSelect.value;
+
+    const header = ["site_id","site_name","method","variable_group","age_axis","export_mode","age_window_min_ka","age_window_max_ka","age_ka_bp","value"].join(",");
+    const lines = [header];
+
+    const ids = selectedOrder.filter(id => selected.has(id));
+    for (const id of ids) {
+      const obj = selected.get(id);
+      const s = obj.site;
+      const xRaw = getAgeArray(s);
+
+      for (const key of keys) {
+        const method = methodForKey(key);
+        const yRaw = (s.series && s.series[key]) ? s.series[key] : [];
+        const filtered = filterPairs(xRaw, yRaw, minA, maxA, mode); // mode decides windowing
+
+        for (let i=0; i<filtered.x.length; i++) {
+          const age = filtered.x[i];
+          const val = filtered.y[i];
+          const name = '"' + String(s.name).replaceAll('"','""') + '"';
+          lines.push([
+            String(s.site_id),
+            name,
+            method,
+            '"' + group.replaceAll('"','""') + '"',
+            axis,
+            mode,
+            minA.toFixed(6),
+            maxA.toFixed(6),
+            age.toFixed(6),
+            val.toFixed(6)
+          ].join(","));
+        }
+      }
+    }
+
+    const safe = group.replaceAll(/[^\w\-]+/g,'_');
+    const fname = `selected_${safe}_${axis}_${mode}_${minA.toFixed(1)}-${maxA.toFixed(1)}ka.csv`;
+    downloadText(fname, lines.join("\n"));
+  });
+
+  // Initial render
+  updateSelectedList();
+  sliderEl.noUiSlider.set([globalMin, globalMax]);
+  updatePlot();
+
+})();
+</script>
+</body>
+</html>

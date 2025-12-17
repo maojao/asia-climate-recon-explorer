@@ -422,7 +422,19 @@
       </ul>
     </div>
 
-    <h3>References & DOIs</h3>
+    
+    <h3>제작 정보</h3>
+    <div class="callout">
+      <ul>
+        <li><b>뷰어 제작:</b> Yeongcheol Han (Korea Polar Research Institute)</li>
+        <li><b>문의:</b> <a href="mailto:yhan@kopri.re.kr">yhan@kopri.re.kr</a></li>
+      </ul>
+      <p class="small">
+        본 인터랙티브 뷰어는 코드 구조화 및 문서화를 위해 생성형 AI(ChatGPT)의 도움을 받아 개발되었습니다.
+      </p>
+    </div>
+
+<h3>References & DOIs</h3>
     <div class="callout">
       <ul>
         <li><b>논문(ESSD):</b> <a href="https://doi.org/10.5194/essd-15-2235-2023" target="_blank" rel="noopener">10.5194/essd-15-2235-2023</a></li>
@@ -571,6 +583,7 @@ function closeOverlay(id, markWelcomeSeen){
   if (langSelect) {
     langSelect.addEventListener('change', () => {
       const v = langSelect.value;
+      try { localStorage.setItem('acrex_lang_pref', v); } catch(e) {}
       if (v === 'ko') window.location.href = 'index_ko.html';
       else window.location.href = 'index_en.html';
     });

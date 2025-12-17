@@ -438,6 +438,7 @@ function closeOverlay(id, markWelcomeSeen){
   if (langSelect) {
     langSelect.addEventListener('change', () => {
       const v = langSelect.value;
+      try { localStorage.setItem('acrex_lang_pref', v); } catch(e) {}
       if (v === 'ko') window.location.href = 'index_ko.html';
       else window.location.href = 'index_en.html';
     });
